@@ -491,21 +491,36 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 		}
 		
 		// Reduce the size of the h_Chain array
-		int i , j;
-		for(i = 0, j = 0; i < n;) {
-			printf("Iter : %d,%d,%d\n", i,j,n);
-			
-			//h_muls[i] is the error
-			while(h_muls[j] > i) {
-				h_Chain[i].width = h_Chain[i + j].width;	
-				h_Chain[i].height = h_Chain[i + j].height;
-				h_Chain[i].elements = h_Chain[i + j].elements;
-				i++;
-			}
-			i++;
-			++j;
-			--n;
+		for(int i = 0; i < numMuls; ++i){
+			h_Chain[h_muls[i]+1].width = 0;	
+			h_Chain[h_muls[i]+1].height = 0;
 		}
+
+		for(int i = 0, j =0; i < n; ++i) {
+			if(h_Chain[i+j].width == 0) {
+				j++;
+				n--;
+			}
+			h_Chain[i].width = h_Chain[i + j].width;	
+			h_Chain[i].height = h_Chain[i + j].height;
+			h_Chain[i].elements = h_Chain[i + j].elements;
+		}
+
+		// int i , j;
+		// for(i = 0, j = 0; i < n;) {
+		// 	printf("Iter : %d,%d,%d\n", i,j,n);
+			
+		// 	//h_muls[i] is the bug
+		// 	while(h_muls[j] > i) {
+		// 		h_Chain[i].width = h_Chain[i + j].width;	
+		// 		h_Chain[i].height = h_Chain[i + j].height;
+		// 		h_Chain[i].elements = h_Chain[i + j].elements;
+		// 		i++;
+		// 	}
+		// 	i++;
+		// 	++j;
+		// 	--n;
+		// }
 		// Small memory leak here - should use Free h_Chain.elements for last few elements(but removing this is difficult)
 
 		// Refresh d_Chain
