@@ -1,10 +1,6 @@
 /*
 * multNoShare.c
 *
-* Robert Hochberg
-* January 24, 2012
-*
-* Based nearly entirely on the code from the CUDA C Programming Guide
 */
 #include "matrix.cuh"
 
