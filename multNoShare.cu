@@ -274,11 +274,6 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 	err = cudaMemcpy(Result.elements, h_Chain[0].elements, size, cudaMemcpyDeviceToHost);
 	//printf("Copy Result off of device: %s\n",cudaGetErrorString(err));
 	
-	
-	// Free device memory
-	// for(int i = 0; i < numMats;++i) {        
-	// 	cudaFree(h_Chain[i].elements);
-	// }
 	cudaFree(h_Chain[0].elements);
 	cudaFree(d_Chain);
 	free(h_Chain);
