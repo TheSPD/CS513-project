@@ -1,10 +1,6 @@
 /*
 * multShare.h
 *
-* Robert Hochberg
-* January 24, 2012
-*
-* Based nearly entirely on the code from the CUDA C Programming Guide
 */
 #include <stdio.h>
 // Matrices are stored in row-major order:

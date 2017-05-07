@@ -3,6 +3,7 @@
 *
 */
 #include "matrix.cuh"
+#include <math.h>
 
 
 // Matrix multiplication - Host code
@@ -31,16 +32,18 @@ __device__ void MatMul(Matrix A, Matrix B, Matrix C){
 			C.elements[i*C.width + j] = 0;
 			
 	for (int i = 0; i < A.height; ++i)
-		for(int j = 0; j < B.width; ++j)
+		for(int j = 0; j < B.width; ++j) {
 			for(int k = 0; k < A.width; ++k)
-				C.elements[i*B.width + j] += A.elements[i*A.width + k] * B.elements[k*B.width + j];
+				C.elements[i * B.width + j] += A.elements[i * A.width + k] * B.elements[k * B.width + j];
+			// C.elements[i * B.width + j] = float(int(C.elements[i * B.width + j]) % 256);
+			C.elements[i * B.width + j] = fmod(C.elements[i * B.width + j], (float)256) + 1;
+		}
 }
 
 __global__ void ChainMatMulKernel(Matrix* Chain, int* Muls, Matrix* IntRes) {
 	int threadId = blockIdx.x * blockDim.x + threadIdx.x;
 
-	
-	int mulNum = Muls[threadId];	
+	int mulNum = Muls[threadId];
 
 	// Parallel Matmul code - Cannot run this on iLab machines due to incompatible hardware
 	// dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
@@ -124,17 +127,16 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 		h_Chain[i].height = Chain[i].height;
 		size = h_Chain[i].width * h_Chain[i].height * sizeof(float);
 		err = cudaMalloc(&h_Chain[i].elements, size);
-		printf("CUDA malloc Chain[%d].elements: %s\n", i, cudaGetErrorString(err));
+		//printf("CUDA malloc Chain[%d].elements: %s\n", i, cudaGetErrorString(err));
 		err = cudaMemcpy(h_Chain[i].elements, Chain[i].elements, size, cudaMemcpyHostToDevice);
-		printf("Copy Chain[%d].elements to device: %s\n", i, cudaGetErrorString(err));
+		//printf("Copy Chain[%d].elements to device: %s\n", i, cudaGetErrorString(err));
 	}
 		
 	// Trasfer from h_Chain to d_Chain
 	size = n * sizeof(Matrix);
 	err = cudaMalloc(&d_Chain, size);
-	printf("CUDA malloc Chain: %s\n", cudaGetErrorString(err));
+	//printf("CUDA malloc Chain: %s\n", cudaGetErrorString(err));
 	err = cudaMemcpy(d_Chain, h_Chain, size, cudaMemcpyHostToDevice);
-	printf("Copy Chain to device: %s\n", cudaGetErrorString(err));
 	
 
 	while (n > 1) {
@@ -155,7 +157,7 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 
 		// Select muls
 		for(int i = 0, j = 0;i < numDims; ++i) {
-			if(ChainDims[i] != 0) {
+			if(ChainDims[i] != 0 && (numMuls < 1024)) {
 				h_muls[j] = ChainDimOrder[i];
 				numMuls++;
 				j++;
@@ -170,18 +172,19 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 		free(ChainDimOrder);
 
 		SequentialSelectionSort(h_muls, numMuls);
-		printf("\nh_muls : ");
+		printf("\nMultiplication choices : ");
 		for(int i = 0; i < numMuls; ++i) {
-			printf("%d ", h_muls[i]);
+			printf("Mat%d x Mat%d\t", h_muls[i], (h_muls[i]+1));
 		}
+		printf("\n");
 		// **************************************************************************
 
 		// ********************** Transfer stuff to Device **************************
 		// Transfer muls on device
 		err = cudaMalloc(&d_muls, numMuls * sizeof(int));
-		printf("CUDA malloc Muls: %s\n", cudaGetErrorString(err));
+		//printf("CUDA malloc Muls: %s\n", cudaGetErrorString(err));
 		err = cudaMemcpy(d_muls, h_muls, numMuls * sizeof(int), cudaMemcpyHostToDevice);
-		printf("Copy Muls to device: %s\n", cudaGetErrorString(err));
+		//printf("Copy Muls to device: %s\n", cudaGetErrorString(err));
 
 		// Hold intermediate results on host with elements on device
 		h_IntRes = (Matrix*)malloc(numMuls * sizeof(Matrix));
@@ -192,15 +195,15 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 			h_IntRes[i].width = h_Chain[h_muls[i] + 1].width;
 			size_t size = h_IntRes[i].width * h_IntRes[i].height * sizeof(float);
 			err = cudaMalloc(&h_IntRes[i].elements, size);
-			printf("CUDA malloc IntRes[%d]: %s\n", i, cudaGetErrorString(err));
+			//printf("CUDA malloc IntRes[%d]: %s\n", i, cudaGetErrorString(err));
 		}
 		
 		// IntRes Fully on device
 		size = numMuls * sizeof(Matrix);
 		err = cudaMalloc(&d_IntRes, size);
-		printf("CUDA malloc Chain: %s\n", cudaGetErrorString(err));
+		//printf("CUDA malloc Chain: %s\n", cudaGetErrorString(err));
 		err = cudaMemcpy(d_IntRes, h_IntRes, size, cudaMemcpyHostToDevice);
-		printf("Copy Chain to device: %s\n", cudaGetErrorString(err));
+		//printf("Copy Chain to device: %s\n", cudaGetErrorString(err));
 		
 		// **************************************************************************
 
@@ -210,7 +213,7 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 		// Call to the kernel
 		ChainMatMulKernel<<<1, dimGrid>>>(d_Chain, d_muls, d_IntRes); 
 		err = cudaThreadSynchronize();
-		printf("Run kernel: %s\n", cudaGetErrorString(err));
+		//printf("Run kernel: %s\n", cudaGetErrorString(err));
 
 		// **************************************************************************
 
@@ -249,9 +252,9 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 		
 		size = n * sizeof(Matrix);
 		err = cudaMalloc(&d_Chain, size);
-		printf("CUDA malloc Chain: %s\n", cudaGetErrorString(err));
+		//printf("CUDA malloc Chain: %s\n", cudaGetErrorString(err));
 		err = cudaMemcpy(d_Chain, h_Chain, size, cudaMemcpyHostToDevice);
-		printf("Copy Chain to device: %s\n", cudaGetErrorString(err));
+		//printf("Copy Chain to device: %s\n", cudaGetErrorString(err));
 			
 		// Free stuff
 		free(h_muls);
@@ -269,17 +272,15 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 	Result.elements =  (float*)malloc(size);
 	printf("\n Result : %d x %d : ", Result.height, Result.width);
 	err = cudaMemcpy(Result.elements, h_Chain[0].elements, size, cudaMemcpyDeviceToHost);
-	printf("Copy Result off of device: %s\n",cudaGetErrorString(err));
+	//printf("Copy Result off of device: %s\n",cudaGetErrorString(err));
 	
 	
 	// Free device memory
-	for(int i = 0; i < numMats;++i) {        
-		cudaFree(h_Chain[i].elements);
-	}
-	
-	cudaFree(d_muls);
+	// for(int i = 0; i < numMats;++i) {        
+	// 	cudaFree(h_Chain[i].elements);
+	// }
+	cudaFree(h_Chain[0].elements);
 	cudaFree(d_Chain);
-	free(h_muls);
 	free(h_Chain);
 	
 	return Result;
@@ -291,8 +292,8 @@ int main(int argc, char* argv[]){
 	Matrix Result;
 	int* dims; 
 	
-	if(argc <= 3 || (argc != (atoi(argv[1]) + 3))) {
-		printf("Please input in the following format\n multNoShare.out [#Matrices] [Mat1 height] [Mat1 width/Mat2 height] [Mat2 width/Mat3 height] .... [Matn width] \n");
+	if(argc != 2) {
+		printf("Please input in the following format\n multNoShare.out [#Matrices] \n");
 		return 0;
 	}
 	
@@ -301,7 +302,7 @@ int main(int argc, char* argv[]){
 	
 	dims = (int *) malloc((n+1)*sizeof(int));
 	for(int i = 0; i <= n; ++i) {
-		dims[i] = atoi(argv[i+2]);
+		dims[i] = (random() % 9) + 1;
 	}
 	
 	Chain = (Matrix *) malloc(n*sizeof(Matrix));
@@ -314,9 +315,9 @@ int main(int argc, char* argv[]){
 	for(int k = 0; k < n; ++k)
 		for(int i = 0; i < Chain[k].height; i++)
 			for(int j = 0; j < Chain[k].width; j++)
-				Chain[k].elements[i*Chain[k].width + j] = (float)(random() % 3);
+				Chain[k].elements[i*Chain[k].width + j] = (float)((random() % 3) + 1);
 		
-	// Print up to a 10x10 portion of the three matrices
+	// Print up to a 10x10 portion of the matrices
 	for(int k = 0; k < n; ++k) {
 		printf("\n Chain[%d] : \n", k);
 		for(int i = 0; i < min(10, Chain[k].height); i++){
@@ -329,7 +330,7 @@ int main(int argc, char* argv[]){
 
 	Result = ChainMatMul(Chain, n);
 	
-	// Print up to a 10x10 portion of the three matrices
+	// Print up to a 10x10 portion of the Result
 	printf("\n Result : \n");
 	for(int i = 0; i < min(10, Result.height); i++){
 		for(int j = 0; j < min(10, Result.width); j++)
