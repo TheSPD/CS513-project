@@ -4,6 +4,7 @@
 */
 #include "matrix.cuh"
 #include <math.h>
+#include <stdio.h>
 
 
 // Matrix multiplication - Host code
@@ -33,10 +34,11 @@ __device__ void MatMul(Matrix A, Matrix B, Matrix C){
 			
 	for (int i = 0; i < A.height; ++i)
 		for(int j = 0; j < B.width; ++j) {
-			for(int k = 0; k < A.width; ++k)
+			for(int k = 0; k < A.width; ++k){
 				C.elements[i * B.width + j] += A.elements[i * A.width + k] * B.elements[k * B.width + j];
+				C.elements[i * B.width + j] = fmod(C.elements[i * B.width + j], (float)256);
+			}
 			// C.elements[i * B.width + j] = float(int(C.elements[i * B.width + j]) % 256);
-			C.elements[i * B.width + j] = fmod(C.elements[i * B.width + j], (float)256) + 1;
 		}
 }
 
@@ -64,21 +66,21 @@ void SequentialSelectionSortDouble(int* array, int* arrayOrder, int n) {
 	for(c = 0 ; c < ( n - 1 ) ; c++) {
 		position = c;
  
-      	for ( d = c + 1 ; d < n ; d++ ) {
-        	if ( array[position] < array[d] )
-            	position = d;
-      	}
-      	if(position != c) {
-        	swap = array[c];
-        	swapOrder = arrayOrder[c];
-         
-        	array[c] = array[position];
-        	arrayOrder[c] = arrayOrder[position];
+		for ( d = c + 1 ; d < n ; d++ ) {
+			if ( array[position] < array[d] )
+				position = d;
+		}
+		if(position != c) {
+			swap = array[c];
+			swapOrder = arrayOrder[c];
+		 
+			array[c] = array[position];
+			arrayOrder[c] = arrayOrder[position];
 
-        	array[position] = swap;
-        	arrayOrder[position] = swapOrder;
-      	}
-   	}
+			array[position] = swap;
+			arrayOrder[position] = swapOrder;
+		}
+	}
 }
 
 void SequentialSelectionSort(int* array, int n) {
@@ -87,18 +89,18 @@ void SequentialSelectionSort(int* array, int n) {
 	for(c = 0 ; c < ( n - 1 ) ; c++) {
 		position = c;
  
-      	for ( d = c + 1 ; d < n ; d++ ) {
-        	if ( array[position] > array[d] )
-            	position = d;
-      	}
-      	if(position != c) {
-        	swap = array[c];
-         
-        	array[c] = array[position];
+		for ( d = c + 1 ; d < n ; d++ ) {
+			if ( array[position] > array[d] )
+				position = d;
+		}
+		if(position != c) {
+			swap = array[c];
+		 
+			array[c] = array[position];
 
-        	array[position] = swap;
-      	}
-   	}
+			array[position] = swap;
+		}
+	}
 }
 
 Matrix ChainMatMul(Matrix* Chain, int numMats) {
@@ -287,33 +289,64 @@ int main(int argc, char* argv[]){
 	int* dims; 
 	
 	if(argc != 2) {
-		printf("Please input in the following format\n multNoShare.out [#Matrices] \n");
+		printf("Please input in the following format\n multNoShare.out [#FileName] \n");
 		return 0;
 	}
-	
-	//Read values from commandLine
-	int n = atoi(argv[1]);
-	
+		
+	char const* const fileName = argv[1]; /* should check that argc > 1 */
+
+	FILE* file = fopen(fileName, "r"); /* should check the result */
+	char nLine[10];
+	char line[256 * 5];
+	int lineNums[256];
+
+	// Read values from file
+	int n = atoi(fgets(nLine, sizeof(nLine), file)) - 1;
+	int sizeDim = sizeof(char) * (n+1) * 5;
+
+	char* dimLine = (char *)malloc(sizeDim);
+	fgets(dimLine, sizeof(char) * (n+1) * 5, file);
+	char oneNum[5];
 	dims = (int *) malloc((n+1)*sizeof(int));
-	for(int i = 0; i <= n; ++i) {
-		dims[i] = (random() % 9) + 1;
+
+	for(int i = 0, k = 0; dimLine[i] != '\0' ;++i) {
+		int j = 0;
+		for(; dimLine[i] != ' ' && dimLine[i]!= '\0'; ++j,++i){
+			oneNum[j] = dimLine[i];
+		}
+		oneNum[j] = '\0';
+		dims[k++] = atoi(oneNum);
 	}
-	
+
 	Chain = (Matrix *) malloc(n*sizeof(Matrix));
 	for(int i = 0; i < n; ++i) {
 		Chain[i].height = dims[i];
 		Chain[i].width = dims[i+1];
 		Chain[i].elements = (float*)malloc(Chain[i].width * Chain[i].height * sizeof(float));
 	}
-	
+
 	for(int k = 0; k < n; ++k)
-		for(int i = 0; i < Chain[k].height; i++)
-			for(int j = 0; j < Chain[k].width; j++)
-				Chain[k].elements[i*Chain[k].width + j] = (float)((random() % 3) + 1);
-		
-	// Print up to a 10x10 portion of the matrices
+		for(int i = 0; i < Chain[k].height; i++){
+			fgets(line, sizeof(line), file);
+			for(int p = 0, q = 0; line[p] != '\0' ;++p) {
+				int r = 0;
+				for(; line[p] != ' ' && line[p]!= '\0'; ++r,++p){
+					oneNum[r] = line[p];
+				}
+				oneNum[r] = '\0';
+				lineNums[q++] = atoi(oneNum);
+			}	
+			for(int j = 0; j < Chain[k].width; j++) {
+				Chain[k].elements[i*Chain[k].width + j] = lineNums[j];
+			}
+		}
+
+
+	fclose(file); 
+
+	printf("Print up to a 10x10 portion of the matrices - to avoid clutter");
 	for(int k = 0; k < n; ++k) {
-		printf("\n Chain[%d] : \n", k);
+		printf("\n Chain[%d] : %d x %d\n", k, Chain[k].height, Chain[k].width);
 		for(int i = 0; i < min(10, Chain[k].height); i++){
 			for(int j = 0; j < min(10, Chain[k].width); j++)
 				printf("%0.0f ", Chain[k].elements[i*Chain[k].width + j]);

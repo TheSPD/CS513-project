@@ -1,5 +1,5 @@
 /*
-* multShare.h
+* matrix.h
 *
 */
 #include <stdio.h>
@@ -9,7 +9,6 @@ typedef struct {
     int width;
     int height;
     float* elements;
-//    int stride;
 } Matrix;
 
 // Thread block size
