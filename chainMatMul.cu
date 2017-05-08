@@ -356,7 +356,7 @@ int main(int argc, char* argv[]){
 	Result = ChainMatMul(Chain, n);
 	
 	// Print up to a 10x10 portion of the Result
-	printf("\n Result : \n");
+	printf("\n Result : %d x %d\n", Result.height, Result.width);
 	for(int i = 0; i < min(10, Result.height); i++){
 		for(int j = 0; j < min(10, Result.width); j++)
 			printf("%d ", Result.elements[i*Result.width + j]);
