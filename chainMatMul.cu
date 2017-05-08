@@ -3,7 +3,6 @@
 *
 */
 #include "matrix.cuh"
-#include <math.h>
 #include <stdio.h>
 
 
@@ -16,7 +15,7 @@
 __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
 	// Each thread computes one element of C
 	// by accumulating results into Cvalue
-	float Cvalue = 0.0;
+	int Cvalue = 0;
 	int row = blockIdx.y * blockDim.y + threadIdx.y;
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
 	
@@ -36,9 +35,8 @@ __device__ void MatMul(Matrix A, Matrix B, Matrix C){
 		for(int j = 0; j < B.width; ++j) {
 			for(int k = 0; k < A.width; ++k){
 				C.elements[i * B.width + j] += A.elements[i * A.width + k] * B.elements[k * B.width + j];
-				C.elements[i * B.width + j] = fmod(C.elements[i * B.width + j], (float)256);
+				C.elements[i * B.width + j] = C.elements[i * B.width + j] % 256;
 			}
-			// C.elements[i * B.width + j] = float(int(C.elements[i * B.width + j]) % 256);
 		}
 }
 
@@ -127,7 +125,7 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 	for(int i = 0; i < n;++i) {	        
 		h_Chain[i].width = Chain[i].width;
 		h_Chain[i].height = Chain[i].height;
-		size = h_Chain[i].width * h_Chain[i].height * sizeof(float);
+		size = h_Chain[i].width * h_Chain[i].height * sizeof(int);
 		err = cudaMalloc(&h_Chain[i].elements, size);
 		//printf("CUDA malloc Chain[%d].elements: %s\n", i, cudaGetErrorString(err));
 		err = cudaMemcpy(h_Chain[i].elements, Chain[i].elements, size, cudaMemcpyHostToDevice);
@@ -195,7 +193,7 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 		for(int i = 0; i < numMuls; ++i) {
 			h_IntRes[i].height = h_Chain[h_muls[i]].height;
 			h_IntRes[i].width = h_Chain[h_muls[i] + 1].width;
-			size_t size = h_IntRes[i].width * h_IntRes[i].height * sizeof(float);
+			size_t size = h_IntRes[i].width * h_IntRes[i].height * sizeof(int);
 			err = cudaMalloc(&h_IntRes[i].elements, size);
 			//printf("CUDA malloc IntRes[%d]: %s\n", i, cudaGetErrorString(err));
 		}
@@ -270,8 +268,8 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 	// Read Result from device memory
 	Result.width = h_Chain[0].width;	
 	Result.height = h_Chain[0].height;
-	size = Result.width * Result.height * sizeof(float);
-	Result.elements =  (float*)malloc(size);
+	size = Result.width * Result.height * sizeof(int);
+	Result.elements =  (int*)malloc(size);
 	err = cudaMemcpy(Result.elements, h_Chain[0].elements, size, cudaMemcpyDeviceToHost);
 	//printf("Copy Result off of device: %s\n",cudaGetErrorString(err));
 	
@@ -322,7 +320,7 @@ int main(int argc, char* argv[]){
 	for(int i = 0; i < n; ++i) {
 		Chain[i].height = dims[i];
 		Chain[i].width = dims[i+1];
-		Chain[i].elements = (float*)malloc(Chain[i].width * Chain[i].height * sizeof(float));
+		Chain[i].elements = (int*)malloc(Chain[i].width * Chain[i].height * sizeof(int));
 	}
 
 	for(int k = 0; k < n; ++k)
@@ -349,7 +347,7 @@ int main(int argc, char* argv[]){
 		printf("\n Chain[%d] : %d x %d\n", k, Chain[k].height, Chain[k].width);
 		for(int i = 0; i < min(10, Chain[k].height); i++){
 			for(int j = 0; j < min(10, Chain[k].width); j++)
-				printf("%0.0f ", Chain[k].elements[i*Chain[k].width + j]);
+				printf("%d ", Chain[k].elements[i*Chain[k].width + j]);
 			printf("\n");
 		}
 	}
@@ -361,7 +359,7 @@ int main(int argc, char* argv[]){
 	printf("\n Result : \n");
 	for(int i = 0; i < min(10, Result.height); i++){
 		for(int j = 0; j < min(10, Result.width); j++)
-			printf("%0.0f ", Result.elements[i*Result.width + j]);
+			printf("%d ", Result.elements[i*Result.width + j]);
 		printf("\n");
 	}
 	

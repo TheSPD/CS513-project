@@ -8,7 +8,7 @@
 typedef struct {
     int width;
     int height;
-    float* elements;
+    int* elements;
 } Matrix;
 
 // Thread block size
