@@ -14,5 +14,5 @@ typedef struct {
 // Thread block size
 #define BLOCK_SIZE 32
 
-__global__ void MatMulKernel(const Matrix, const Matrix, Matrix);
+__global__ void ChainMatMulKernel(const Matrix, const Matrix, Matrix);
 

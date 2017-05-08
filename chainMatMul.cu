@@ -10,52 +10,20 @@
 // Matrix dimensions are assumed to be multiples of BLOCK_SIZE
 // Parallel multiplication of Matrices
 
-
-// Matrix multiplication kernel called by MatMul()
-__global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
-	// Each thread computes one element of C
-	// by accumulating results into Cvalue
-	int Cvalue = 0;
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
-	int col = blockIdx.x * blockDim.x + threadIdx.x;
-	
-	if(row > A.height || col > B.width) return;
-	for (int e = 0; e < A.width; ++e)
-		Cvalue += (A.elements[row * A.width + e]) * (B.elements[e * B.width + col]);
-	C.elements[row * C.width + col] = Cvalue;
-}
-
-__device__ void MatMul(Matrix A, Matrix B, Matrix C){	
-	
-	for (int i = 0; i < A.height; ++i)
-		for(int j = 0; j < B.width; ++j)
-			C.elements[i*C.width + j] = 0;
-			
-	for (int i = 0; i < A.height; ++i)
-		for(int j = 0; j < B.width; ++j) {
-			for(int k = 0; k < A.width; ++k){
-				C.elements[i * B.width + j] += A.elements[i * A.width + k] * B.elements[k * B.width + j];
-				C.elements[i * B.width + j] = C.elements[i * B.width + j] % 256;
-			}
-		}
-}
-
 __global__ void ChainMatMulKernel(Matrix* Chain, int* Muls, Matrix* IntRes) {
-	int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+	int threadId = blockIdx.x;
+	int row = blockIdx.y;
+	int col = blockIdx.z;
+	int Cvalue = 0;
 
 	int mulNum = Muls[threadId];
 
-	// Parallel Matmul code - Cannot run this on iLab machines due to incompatible hardware
-	// dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-	// dim3 dimGrid((Chain[mulNum+1].width + dimBlock.x - 1) / dimBlock.x,
-	// (Chain[mulNum].height + dimBlock.y - 1) / dimBlock.y);
-
-	// MatMulKernel<<<dimGrid, dimBlock>>>(Chain[mulNum], Chain[mulNum + 1], IntRes[threadId]);
-	
-	// Sequential MatMul Code
-	
-	MatMul(Chain[mulNum], Chain[mulNum + 1], IntRes[threadId]);
-	   
+	if(row >= Chain[mulNum].height || col >= Chain[mulNum + 1].width) return;
+	for (int e = 0; e < Chain[mulNum].width; ++e){
+		Cvalue += ((Chain[mulNum].elements[row * Chain[mulNum].width + e]) * (Chain[mulNum + 1].elements[e * Chain[mulNum + 1].width + col]));
+		Cvalue = Cvalue	% 256;
+	}
+	IntRes[threadId].elements[row * IntRes[threadId].width + col] = Cvalue;	   
 }
 
 void SequentialSelectionSortDouble(int* array, int* arrayOrder, int n) {
@@ -208,10 +176,10 @@ Matrix ChainMatMul(Matrix* Chain, int numMats) {
 		// **************************************************************************
 
 		// *************************** Actual Multiplication ************************
-		dim3 dimGrid(numMuls);
+		dim3 dimGrid(numMuls, 256, 256);
 
 		// Call to the kernel
-		ChainMatMulKernel<<<1, dimGrid>>>(d_Chain, d_muls, d_IntRes); 
+		ChainMatMulKernel<<<dimGrid, 1>>>(d_Chain, d_muls, d_IntRes); 
 		err = cudaThreadSynchronize();
 		//printf("Run kernel: %s\n", cudaGetErrorString(err));
 
